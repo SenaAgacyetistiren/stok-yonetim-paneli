@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stok Yönetim Paneli</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <!-- Chart.js Kütüphanesi -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { background-color: #f4f6f9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        .kpi-card { border: none; border-radius: 12px; transition: transform 0.2s; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .kpi-card:hover { transform: translateY(-3px); }
+        .card-custom { border: none; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+    </style>
+</head>
+<body class="py-4">
+
+<!-- TOAST BİLDİRİM ALANI -->
+<div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1090;">
+    <div id="canliToast" class="toast align-items-center text-white border-0" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="d-flex">
+            <div class="toast-body" id="toastIcerik"></div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        </div>
+    </div>
+</div>
+
+<div class="container">
+    <!-- Üst Başlık ve Butonlar -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
+        <div>
+            <h2 class="fw-bold text-dark mb-0">📦 Envanter ve Stok Yönetim Paneli</h2>
+            <small class="text-muted">Gerçek zamanlı ürün takip, analiz ve operasyon merkezi</small>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-success" onclick="csvIndir()">
+                <i class="bi bi-file-earmark-excel me-1"></i> Excel'e Aktar
+            </button>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#ekleModal">
+                <i class="bi bi-plus-circle me-1"></i> Yeni Ürün Ekle
+            </button>
+        </div>
+    </div>
+
+    <!-- 1. DASHBOARD KPI METRİK KARTLARI -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card kpi-card p-3 bg-white">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <span class="text-muted small">Ürün Çeşidi</span>
+                        <h3 class="fw-bold mb-0 text-primary" id="kpiToplamCesit">0</h3>
+                    </div>
+                    <div class="p-3 bg-primary bg-opacity-10 rounded-circle text-primary">
+                        <i class="bi bi-box-seam fs-4"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card kpi-card p-3 bg-white">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <span class="text-muted small">Toplam Depo Stoğu</span>
+                        <h3 class="fw-bold mb-0 text-success" id="kpiToplamStok">0</h3>
+                    </div>
+                    <div class="p-3 bg-success bg-opacity-10 rounded-circle text-success">
+                        <i class="bi bi-layers fs-4"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card kpi-card p-3 bg-white">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <span class="text-muted small">Envanter Değeri</span>
+                        <h3 class="fw-bold mb-0 text-dark" id="kpiEnvanterDegeri">0 ₺</h3>
+                    </div>
+                    <div class="p-3 bg-dark bg-opacity-10 rounded-circle text-dark">
+                        <i class="bi bi-cash-stack fs-4"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card kpi-card p-3 bg-white">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <span class="text-muted small">Kritik Stok Uyarısı</span>
+                        <h3 class="fw-bold mb-0 text-danger" id="kpiKritikStok">0</h3>
+                    </div>
+                    <div class="p-3 bg-danger bg-opacity-10 rounded-circle text-danger">
+                        <i class="bi bi-exclamation-triangle fs-4"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. ANALİTİK GRAFİKLER BÖLÜMÜ -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-5">
+            <div class="card card-custom p-3 bg-white h-100">
+                <h6 class="fw-bold text-secondary mb-3"><i class="bi bi-pie-chart me-1"></i> Kategorilere Göre Stok Dağılımı</h6>
+                <div style="position: relative; height: 240px;">
+                    <canvas id="kategoriChart"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-7">
+            <div class="card card-custom p-3 bg-white h-100">
+                <h6 class="fw-bold text-secondary mb-3"><i class="bi bi-bar-chart-line me-1"></i> En Yüksek Envanter Değerine Sahip 5 Ürün (₺)</h6>
+                <div style="position: relative; height: 240px;">
+                    <canvas id="degerChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. ARAMA VE FİLTRELEME ÇUBUĞU -->
+    <div class="card p-3 mb-3 border-0 shadow-sm">
+        <div class="row g-2">
+            <div class="col-md-8">
+                <div class="input-group">
+                    <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
+                    <input type="text" id="aramaKutusu" class="form-control border-start-0" placeholder="Ürün adına göre ara..." onkeyup="tabloyuFiltrele()">
+                </div>
+            </div>
+            <div class="col-md-4">
+                <select id="kategoriFiltresi" class="form-select" onchange="tabloyuFiltrele()">
+                    <option value="">Tüm Kategoriler</option>
+                    <option value="Elektronik">Elektronik</option>
+                    <option value="Ev & Yaşam">Ev & Yaşam</option>
+                    <option value="Giyim">Giyim</option>
+                    <option value="Kırtasiye">Kırtasiye</option>
+                    <option value="Kozmetik">Kozmetik</option>
+                    <option value="Diğer">Diğer</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. ÜRÜN TABLOSU -->
+    <div class="card card-custom p-3 bg-white">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 60px;">Sıra</th>
+                        <th>Ürün Adı</th>
+                        <th>Kategori</th>
+                        <th>Birim Fiyat</th>
+                        <th style="width: 220px;">Stok Durumu</th>
+                        <th class="text-center" style="width: 170px;">İşlemler</th>
+                    </tr>
+                </thead>
+                <tbody id="urunlerTablosu"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- YENİ ÜRÜN EKLEME MODALI -->
+<div class="modal fade" id="ekleModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold">Yeni Ürün Ekle</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="urunForm">
+                    <div class="mb-3">
+                        <label class="form-label">Ürün Adı</label>
+                        <input type="text" id="urunAdi" class="form-control" required placeholder="Örn: Mekanik Klavye">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Kategori</label>
+                        <select id="kategori" class="form-select" required>
+                            <option value="" disabled selected>Kategori Seçin...</option>
+                            <option value="Elektronik">Elektronik</option>
+                            <option value="Ev & Yaşam">Ev & Yaşam</option>
+                            <option value="Giyim">Giyim</option>
+                            <option value="Kırtasiye">Kırtasiye</option>
+                            <option value="Kozmetik">Kozmetik</option>
+                            <option value="Diğer">Diğer</option>
+                        </select>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Fiyat (TL)</label>
+                            <input type="number" step="0.01" id="fiyat" class="form-control" required placeholder="0.00">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Stok Adedi</label>
+                            <input type="number" id="stok" class="form-control" required placeholder="0">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100 mt-2">Kaydet</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ÜRÜN DÜZENLEME MODALI -->
+<div class="modal fade" id="duzenleModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold">Ürünü Güncelle</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="duzenleForm">
+                    <input type="hidden" id="duzenleId">
+                    <div class="mb-3">
+                        <label class="form-label">Ürün Adı</label>
+                        <input type="text" id="duzenleUrunAdi" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Kategori</label>
+                        <select id="duzenleKategori" class="form-select" required>
+                            <option value="Elektronik">Elektronik</option>
+                            <option value="Ev & Yaşam">Ev & Yaşam</option>
+                            <option value="Giyim">Giyim</option>
+                            <option value="Kırtasiye">Kırtasiye</option>
+                            <option value="Kozmetik">Kozmetik</option>
+                            <option value="Diğer">Diğer</option>
+                        </select>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Fiyat (TL)</label>
+                            <input type="number" step="0.01" id="duzenleFiyat" class="form-control" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Stok Adedi</label>
+                            <input type="number" id="duzenleStok" class="form-control" required>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-success w-100 mt-2">Değişiklikleri Kaydet</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+<!-- Frontend & Grafik Mantığı -->
+<script>
+    const API_URL = "http://127.0.0.1:8000/urunler";
+    let tumUrunler = [];
+    let kategoriChartInstance = null;
+    let degerChartInstance = null;
+
+    // Toast Bildirim Fonksiyonu
+    function bildirimGoster(mesaj, tur = "info") {
+        const toastEl = document.getElementById("canliToast");
+        const toastGovde = document.getElementById("toastIcerik");
+        toastEl.className = `toast align-items-center text-white border-0 bg-${tur}`;
+        toastGovde.innerHTML = mesaj;
+        const toast = new bootstrap.Toast(toastEl, { delay: 3500 });
+        toast.show();
+    }
+
+    // 1. Verileri API'den Çek
+    async function urunleriGetir() {
+        const response = await fetch(API_URL);
+        tumUrunler = await response.json();
+        
+        guncelleKPIlar(tumUrunler);
+        tabloyuCiz(tumUrunler);
+        grafikleriCiz(tumUrunler);
+    }
+
+    // 2. Grafikleri Güncelle / Çiz
+    function grafikleriCiz(urunler) {
+        // --- Grafik 1: Kategori Dağılımı ---
+        const kategoriSayilari = {};
+        urunler.forEach(u => {
+            kategoriSayilari[u.kategori] = (kategoriSayilari[u.kategori] || 0) + Number(u.stok_adedi);
+        });
+
+        const katLabels = Object.keys(kategoriSayilari);
+        const katData = Object.values(kategoriSayilari);
+
+        if (kategoriChartInstance) {
+            kategoriChartInstance.destroy(); // Eski grafiği temizle
+        }
+
+        const ctxKat = document.getElementById('kategoriChart').getContext('2d');
+        kategoriChartInstance = new Chart(ctxKat, {
+            type: 'doughnut',
+            data: {
+                labels: katLabels,
+                datasets: [{
+                    data: katData,
+                    backgroundColor: ['#0d6efd', '#20c997', '#ffc107', '#fd7e14', '#6f42c1', '#6c757d'],
+                    borderWidth: 2,
+                    borderColor: '#ffffff'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom', labels: { boxWidth: 12 } }
+                }
+            }
+        });
+
+        // --- Grafik 2: En Değerli İlk 5 Ürün (Fiyat x Stok) ---
+        const siraliUrunler = [...urunler]
+            .map(u => ({ adi: u.urun_adi, deger: Number(u.fiyat) * Number(u.stok_adedi) }))
+            .sort((a, b) => b.deger - a.deger)
+            .slice(0, 5);
+
+        const degerLabels = siraliUrunler.map(u => u.adi);
+        const degerData = siraliUrunler.map(u => u.deger);
+
+        if (degerChartInstance) {
+            degerChartInstance.destroy();
+        }
+
+        const ctxDeger = document.getElementById('degerChart').getContext('2d');
+        degerChartInstance = new Chart(ctxDeger, {
+            type: 'bar',
+            data: {
+                labels: degerLabels,
+                datasets: [{
+                    label: 'Toplam Envanter Değeri (₺)',
+                    data: degerData,
+                    backgroundColor: '#198754',
+                    borderRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) { return value.toLocaleString('tr-TR') + ' ₺'; }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // 3. Tabloyu Çiz
+    function tabloyuCiz(liste) {
+        const tbody = document.getElementById("urunlerTablosu");
+        tbody.innerHTML = "";
+
+        if (liste.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-4">Kayıtlı ürün bulunamadı.</td></tr>`;
+            return;
+        }
+
+        liste.forEach((u, index) => {
+            const kritikMi = u.stok_adedi < 15 && u.stok_adedi > 0;
+            const tukendiMi = u.stok_adedi <= 0;
+            let rozetClass = tukendiMi ? 'bg-dark' : (kritikMi ? 'bg-danger' : 'bg-success');
+            let rozetMetin = tukendiMi ? 'Tükendi (0)' : `${u.stok_adedi} Adet ${kritikMi ? '(Kritik)' : ''}`;
+
+            tbody.innerHTML += `
+                <tr>
+                    <td><span class="text-muted fw-bold">#${index + 1}</span></td>
+                    <td><span class="fw-semibold text-dark">${u.urun_adi}</span></td>
+                    <td><span class="badge bg-secondary-subtle text-secondary border">${u.kategori}</span></td>
+                    <td>${Number(u.fiyat).toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺</td>
+                    <td>
+                        <div class="d-flex align-items-center gap-1">
+                            <span class="badge ${rozetClass} me-2" style="min-width: 85px;">${rozetMetin}</span>
+                            <button class="btn btn-sm btn-outline-danger px-2 py-0 fw-bold" title="1 Adet Sat" onclick="hizliStokDegistir(${u.id}, -1)">-1</button>
+                            <button class="btn btn-sm btn-outline-success px-2 py-0 fw-bold" title="5 Adet Stok Ekle" onclick="hizliStokDegistir(${u.id}, 5)">+5</button>
+                        </div>
+                    </td>
+                    <td class="text-center">
+                        <button class="btn btn-sm btn-outline-primary me-1" onclick="duzenlePenceresiAc(${u.id})">
+                            <i class="bi bi-pencil"></i> Düzenle
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="urunSil(${u.id})">
+                            <i class="bi bi-trash"></i> Sil
+                        </button>
+                    </td>
+                </tr>
+            `;
+        });
+    }
+
+    // 4. Hızlı Stok Azalt/Artır
+    async function hizliStokDegistir(id, miktar) {
+        const urun = tumUrunler.find(item => item.id === id);
+        if (!urun) return;
+
+        const yeniStok = Number(urun.stok_adedi) + miktar;
+        if (yeniStok < 0) {
+            bildirimGoster("⚠️ Stok miktarı 0'ın altına düşemez!", "warning");
+            return;
+        }
+
+        const guncelUrun = {
+            urun_adi: urun.urun_adi,
+            kategori: urun.kategori,
+            fiyat: parseFloat(urun.fiyat),
+            stok_adedi: yeniStok
+        };
+
+        const res = await fetch(`${API_URL}/${id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(guncelUrun)
+        });
+
+        if (res.ok) {
+            if (yeniStok === 0) {
+                bildirimGoster(`🚨 <strong>${urun.urun_adi}</strong> tükendi! E-posta uyarısı tetiklendi.`, "danger");
+            } else if (yeniStok < 15) {
+                bildirimGoster(`⚠️ <strong>${urun.urun_adi}</strong> kritik stokta (${yeniStok} adet).`, "warning");
+            } else {
+                bildirimGoster(`✅ <strong>${urun.urun_adi}</strong> güncellendi (${yeniStok} adet).`, "success");
+            }
+            urunleriGetir(); // Grafikler ve tablo anında yenilenir
+        }
+    }
+
+    // 5. KPI Kartlarını Hesapla
+    function guncelleKPIlar(urunler) {
+        document.getElementById("kpiToplamCesit").innerText = urunler.length;
+        document.getElementById("kpiToplamStok").innerText = urunler.reduce((toplam, u) => toplam + Number(u.stok_adedi), 0).toLocaleString('tr-TR');
+        document.getElementById("kpiEnvanterDegeri").innerText = urunler.reduce((toplam, u) => toplam + (Number(u.fiyat) * Number(u.stok_adedi)), 0).toLocaleString('tr-TR', { minimumFractionDigits: 2 }) + " ₺";
+        document.getElementById("kpiKritikStok").innerText = urunler.filter(u => Number(u.stok_adedi) < 15).length;
+    }
+
+    // 6. Canlı Arama ve Kategori Filtresi
+    function tabloyuFiltrele() {
+        const aramaMetni = document.getElementById("aramaKutusu").value.toLowerCase();
+        const secilenKategori = document.getElementById("kategoriFiltresi").value;
+
+        const filtrelenmis = tumUrunler.filter(u => {
+            const adUyuyor = u.urun_adi.toLowerCase().includes(aramaMetni);
+            const kategoriUyuyor = secilenKategori === "" || u.kategori === secilenKategori;
+            return adUyuyor && kategoriUyuyor;
+        });
+
+        tabloyuCiz(filtrelenmis);
+    }
+
+    // 7. Excel İndir
+    function csvIndir() {
+        window.location.href = "http://127.0.0.1:8000/urunler/excel-indir";
+    }
+
+    // 8. Yeni Ürün Ekle (POST)
+    document.getElementById("urunForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const yeniUrun = {
+            urun_adi: document.getElementById("urunAdi").value,
+            kategori: document.getElementById("kategori").value,
+            fiyat: parseFloat(document.getElementById("fiyat").value),
+            stok_adedi: parseInt(document.getElementById("stok").value)
+        };
+
+        await fetch(API_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(yeniUrun)
+        });
+
+        document.getElementById("urunForm").reset();
+        bootstrap.Modal.getInstance(document.getElementById("ekleModal")).hide();
+        bildirimGoster(`🎉 <strong>${yeniUrun.urun_adi}</strong> eklendi!`, "success");
+        urunleriGetir();
+    });
+
+    // 9. Düzenle Modalı Aç
+    function duzenlePenceresiAc(id) {
+        const urun = tumUrunler.find(item => item.id === id);
+        if (!urun) return;
+
+        document.getElementById("duzenleId").value = urun.id;
+        document.getElementById("duzenleUrunAdi").value = urun.urun_adi;
+        document.getElementById("duzenleKategori").value = urun.kategori;
+        document.getElementById("duzenleFiyat").value = urun.fiyat;
+        document.getElementById("duzenleStok").value = urun.stok_adedi;
+
+        const duzenleModal = new bootstrap.Modal(document.getElementById("duzenleModal"));
+        duzenleModal.show();
+    }
+
+    // 10. Ürün Güncelle (PUT)
+    document.getElementById("duzenleForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const id = document.getElementById("duzenleId").value;
+        const guncelUrun = {
+            urun_adi: document.getElementById("duzenleUrunAdi").value,
+            kategori: document.getElementById("duzenleKategori").value,
+            fiyat: parseFloat(document.getElementById("duzenleFiyat").value),
+            stok_adedi: parseInt(document.getElementById("duzenleStok").value)
+        };
+
+        await fetch(`${API_URL}/${id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(guncelUrun)
+        });
+
+        bootstrap.Modal.getInstance(document.getElementById("duzenleModal")).hide();
+        bildirimGoster(`✏️ <strong>${guncelUrun.urun_adi}</strong> güncellendi.`, "primary");
+        urunleriGetir();
+    });
+
+    // 11. Ürün Sil (DELETE)
+    async function urunSil(id) {
+        const urun = tumUrunler.find(item => item.id === id);
+        const urunAdi = urun ? urun.urun_adi : "Ürün";
+
+        if (confirm(`"${urunAdi}" ürününü silmek istediğinize emin misiniz?`)) {
+            await fetch(`${API_URL}/${id}`, { method: "DELETE" });
+            bildirimGoster(`🗑️ <strong>${urunAdi}</strong> silindi.`, "danger");
+            urunleriGetir();
+        }
+    }
+
+    // Sayfa açıldığında başlat
+    urunleriGetir();
+</script>
+</body>
+</html>
